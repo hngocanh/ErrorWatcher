@@ -2,9 +2,16 @@ import { ErrorEntry } from './types'
 
 const attachedTabs = new Set<number>()
 
+// Track request URLs so we can look them up when they fail
+const requestUrls = new Map<string, string>()
+
 // Restore badge on service worker startup
-chrome.storage.local.get({ errors: [] }, (data) => {
-    updateBadge((data.errors as ErrorEntry[]).length)
+chrome.storage.local.get({ errors: [], warnings: [], network: [] }, (data) => {
+    const total =
+        (data.errors as ErrorEntry[]).length +
+        (data.warnings as ErrorEntry[]).length +
+        (data.network as ErrorEntry[]).length
+    updateBadge(total)
 })
 
 // Helper to get hostname safely
@@ -114,6 +121,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Detach when tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
     detachFromTab(tabId)
+
+    // Clean up any tracked requests for this tab
+    for (const key of requestUrls.keys()) {
+        if (key.startsWith(`${tabId}:`)) {
+            requestUrls.delete(key)
+        }
+    }
 })
 
 // Handle forced detach (e.g. user opens DevTools)
@@ -225,6 +239,12 @@ chrome.debugger.onEvent.addListener((source, method, params: any) => {
                     const reason = params?.errorText ?? 'Unknown error'
                     if (reason === 'net::ERR_ABORTED') return
 
+                    const requestId = params?.requestId
+                    const requestUrl = requestUrls.get(`${tabId}:${requestId}`) ?? 'Unknown URL'
+
+                    // Clean up tracked URL
+                    requestUrls.delete(`${tabId}:${requestId}`)
+
                     chrome.tabs.get(tabId, (tab) => {
                         if (chrome.runtime.lastError) return
                         if (!isAllowed(tab.url ?? '', config)) return
@@ -232,8 +252,8 @@ chrome.debugger.onEvent.addListener((source, method, params: any) => {
                         const entry: ErrorEntry = {
                             tabId,
                             tabUrl: tab.url ?? 'unknown',
-                            message: reason,
-                            source: params?.requestId,
+                            message: `${reason} — ${requestUrl}`,
+                            source: requestUrl,  // ← now stores the actual URL
                             timestamp: Date.now(),
                         }
                         saveToStorage('network', entry)
@@ -246,14 +266,16 @@ chrome.debugger.onEvent.addListener((source, method, params: any) => {
 
 // Save entry to storage under a given key
 function saveToStorage(key: 'errors' | 'warnings' | 'network', entry: ErrorEntry) {
-    chrome.storage.local.get({ [key]: [], errors: [] }, (data) => {
+    chrome.storage.local.get({ errors: [], warnings: [], network: [] }, (data) => {
         const items: ErrorEntry[] = (data[key] as ErrorEntry[]) ?? []
         items.unshift(entry)
+
         chrome.storage.local.set({ [key]: items.slice(0, 50) }, () => {
-            const errors: ErrorEntry[] = key === 'errors'
-                ? items.slice(0, 50)
-                : (data.errors as ErrorEntry[]) ?? []
-            updateBadge(errors.length)
+            // Recalculate badge from all three counts combined
+            const errors = key === 'errors' ? items.slice(0, 50) : (data.errors as ErrorEntry[]) ?? []
+            const warnings = key === 'warnings' ? items.slice(0, 50) : (data.warnings as ErrorEntry[]) ?? []
+            const network = key === 'network' ? items.slice(0, 50) : (data.network as ErrorEntry[]) ?? []
+            updateBadge(errors.length + warnings.length + network.length)
         })
     })
 }

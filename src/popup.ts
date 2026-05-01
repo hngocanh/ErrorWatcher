@@ -217,21 +217,40 @@ function loadAll() {
 loadAll()
 
 // --- Clear buttons ---
+// Clear errors only
 document.getElementById('clear-btn')!.addEventListener('click', () => {
-    chrome.storage.local.set({ errors: [] }, () => {
-        renderErrors([])
-        chrome.action.setBadgeText({ text: '' })
+    chrome.storage.local.get({ warnings: [], network: [] }, (data) => {
+        chrome.storage.local.set({ errors: [] }, () => {
+            renderErrors([])
+            const total = (data.warnings as ErrorEntry[]).length + (data.network as ErrorEntry[]).length
+            chrome.action.setBadgeText({ text: total === 0 ? '' : total > 99 ? '99+' : String(total) })
+        })
     })
 })
 
+// Clear warnings only
 document.getElementById('clear-warn-btn')!.addEventListener('click', () => {
-    chrome.storage.local.set({ warnings: [] }, () => renderWarnings([]))
+    chrome.storage.local.get({ errors: [], network: [] }, (data) => {
+        chrome.storage.local.set({ warnings: [] }, () => {
+            renderWarnings([])
+            const total = (data.errors as ErrorEntry[]).length + (data.network as ErrorEntry[]).length
+            chrome.action.setBadgeText({ text: total === 0 ? '' : total > 99 ? '99+' : String(total) })
+        })
+    })
 })
 
+// Clear network only
 document.getElementById('clear-net-btn')!.addEventListener('click', () => {
-    chrome.storage.local.set({ network: [] }, () => renderNetwork([]))
+    chrome.storage.local.get({ errors: [], warnings: [] }, (data) => {
+        chrome.storage.local.set({ network: [] }, () => {
+            renderNetwork([])
+            const total = (data.errors as ErrorEntry[]).length + (data.warnings as ErrorEntry[]).length
+            chrome.action.setBadgeText({ text: total === 0 ? '' : total > 99 ? '99+' : String(total) })
+        })
+    })
 })
 
+// Clear all
 document.getElementById('clear-all-btn')!.addEventListener('click', () => {
     chrome.storage.local.set({ errors: [], warnings: [], network: [] }, () => {
         renderErrors([])
