@@ -51,7 +51,7 @@ function renderErrors(errors: ErrorEntry[]) {
     dot.className = 'dot'
 
     list.innerHTML = errors.map(e => `
-    <div class="error-item" onclick="this.classList.toggle('expanded')">
+    <div class="error-item">
       <div class="error-row">
         <svg class="error-icon" viewBox="0 0 14 14" fill="none">
           <circle cx="7" cy="7" r="6" fill="#FCEBEB" stroke="#F09595" stroke-width="0.8"/>
@@ -69,6 +69,11 @@ function renderErrors(errors: ErrorEntry[]) {
       <div class="error-detail">${e.message}</div>
     </div>
   `).join('')
+
+    // Attach click listeners after rendering
+    list.querySelectorAll('.error-item').forEach(item => {
+        item.addEventListener('click', () => item.classList.toggle('expanded'))
+    })
 }
 
 // --- Render warnings ---

@@ -1,29 +1,32 @@
 {
-  "manifest_version": 3,
-  "name": "Error Watcher",
-  "version": "1.0.0",
-  "description": "Notifies you when console errors appear in any tab.",
-  "permissions": [
-    "debugger",
-    "notifications",
-    "tabs",
-    "storage"
-  ],
-  "background": {
-    "service_worker": "src/background.ts",
-    "type": "module"
-  },
-  "action": {
-    "default_popup": "src/popup.html",
-    "default_icon": {
-      "16": "public/icons/icon16.png",
-      "48": "public/icons/icon48.png",
-      "128": "public/icons/icon128.png"
+    "manifest_version": 3,
+    "name": "Error Watcher",
+    "version": "1.0.0",
+    "description": "Notifies you when console errors appear in any tab.",
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    },
+    "permissions": [
+        "debugger",
+        "notifications",
+        "tabs",
+        "storage"
+    ],
+    "background": {
+        "service_worker": "src/background.ts",
+        "type": "module"
+    },
+    "action": {
+        "default_popup": "src/popup.html",
+        "default_icon": {
+            "16": "public/icons/icon16.png",
+            "48": "public/icons/icon48.png",
+            "128": "public/icons/icon128.png"
+        }
+    },
+    "icons": {
+        "16": "public/icons/icon16.png",
+        "48": "public/icons/icon48.png",
+        "128": "public/icons/icon128.png"
     }
-  },
-  "icons": {
-    "16": "public/icons/icon16.png",
-    "48": "public/icons/icon48.png",
-    "128": "public/icons/icon128.png"
-  }
 }

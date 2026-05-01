@@ -77,25 +77,24 @@ function syncAllTabs() {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
     // Stage 1 — fires the moment URL changes, before page loads
-    // Use this to detach early so banner disappears immediately
     if (changeInfo.url) {
         const url = changeInfo.url
-
         if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')) {
             detachFromTab(tabId)
             return
         }
 
         chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
-            if (!isAllowed(url, config)) {
-                // Navigating to a non-monitored site — detach immediately
+            if (config.mode === 'specific' && !isAllowed(url, config)) {
                 detachFromTab(tabId)
+            } else if (config.mode === 'specific' && isAllowed(url, config) && !attachedTabs.has(tabId)) {
+                // In specific mode, attach early once we know the URL is allowed
+                attachToTab(tabId, url, config)
             }
         })
     }
 
     // Stage 2 — fires when page fully loads
-    // Use this to attach to newly monitored pages
     if (changeInfo.status === 'complete') {
         const url = tab.url
         if (!url) return
@@ -105,14 +104,16 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             const allowed = isAllowed(url, config)
 
             if (allowed && !attachedTabs.has(tabId)) {
-                // Page is monitored and not yet attached — attach now
+                // Not yet attached — attach now
                 attachToTab(tabId, url, config)
             } else if (allowed && attachedTabs.has(tabId)) {
-                // Reload within a monitored site — re-attach cleanly
+                // Already attached from onCreated or previous load — re-attach cleanly for reload
                 chrome.debugger.detach({ tabId }, () => {
                     attachedTabs.delete(tabId)
                     attachToTab(tabId, url, config)
                 })
+            } else if (!allowed) {
+                detachFromTab(tabId)
             }
         })
     }
@@ -135,6 +136,25 @@ chrome.debugger.onDetach.addListener((source) => {
     if (source.tabId !== undefined) {
         attachedTabs.delete(source.tabId)
     }
+})
+
+// Attach as early as possible when a new tab is created
+chrome.tabs.onCreated.addListener((tab) => {
+    if (!tab.id) return
+
+    chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
+        // In all-sites mode, attach immediately even before URL is known
+        if (config.mode === 'all') {
+            chrome.debugger.attach({ tabId: tab.id! }, '1.3', () => {
+                if (chrome.runtime.lastError) return
+                chrome.debugger.sendCommand({ tabId: tab.id! }, 'Runtime.enable')
+                chrome.debugger.sendCommand({ tabId: tab.id! }, 'Log.enable')
+                chrome.debugger.sendCommand({ tabId: tab.id! }, 'Network.enable')
+                attachedTabs.add(tab.id!)
+            })
+        }
+        // In specific-sites mode we wait for the URL to be known in onUpdated
+    })
 })
 
 // Listen for all CDP events
