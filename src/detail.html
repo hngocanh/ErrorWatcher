@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Error Detail — Error Watcher</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f7f7f7;
+            color: #111;
+            font-size: 14px;
+            padding: 32px;
+            max-width: 860px;
+            margin: 0 auto;
+        }
+
+        .back {
+            font-size: 12px;
+            color: #888;
+            cursor: pointer;
+            margin-bottom: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            text-decoration: none;
+        }
+
+        .back:hover {
+            color: #111;
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-weight: 500;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+
+        .error-type {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+
+        .type-error {
+            background: #FCEBEB;
+            color: #A32D2D;
+        }
+
+        .type-warning {
+            background: #FAEEDA;
+            color: #633806;
+        }
+
+        .type-network {
+            background: #FCEBEB;
+            color: #791F1F;
+        }
+
+        .error-message {
+            font-size: 15px;
+            font-weight: 500;
+            color: #A32D2D;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 8px 16px;
+            font-size: 13px;
+        }
+
+        .meta-label {
+            color: #aaa;
+        }
+
+        .meta-value {
+            color: #111;
+            word-break: break-all;
+        }
+
+        .stack {
+            font-family: monospace;
+            font-size: 12px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            padding: 16px;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #333;
+            border: 1px solid #eee;
+        }
+
+        .stack-line {
+            display: block;
+        }
+
+        .stack-line.highlight {
+            color: #A32D2D;
+            font-weight: 500;
+        }
+
+        .copy-btn {
+            font-size: 11px;
+            padding: 4px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: transparent;
+            color: #666;
+            cursor: pointer;
+            float: right;
+            margin-top: -2px;
+        }
+
+        .copy-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .copy-btn.copied {
+            color: #639922;
+            border-color: #639922;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 12px;
+            line-height: 1.6;
+            background: #f7f7f7;
+            border-radius: 6px;
+            padding: 10px 14px;
+            border: 1px solid #eee;
+        }
+
+        .hint strong {
+            color: #555;
+        }
+
+        h1 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <a class="back" onclick="window.close()">← Close</a>
+    <h1>
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="8" fill="#FCEBEB" stroke="#F09595" stroke-width="1" />
+            <text x="9" y="13.5" text-anchor="middle" font-size="11" fill="#A32D2D" font-weight="700">!</text>
+        </svg>
+        Error Detail
+    </h1>
+
+    <div class="card">
+        <div class="card-title">Error</div>
+        <div id="error-type" class="error-type type-error">JS Exception</div>
+        <div id="error-message" class="error-message"></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Details</div>
+        <div class="meta-grid">
+            <span class="meta-label">Source</span>
+            <span class="meta-value" id="detail-source">—</span>
+            <span class="meta-label">Line</span>
+            <span class="meta-value" id="detail-line">—</span>
+            <span class="meta-label">Page</span>
+            <span class="meta-value" id="detail-url">—</span>
+            <span class="meta-label">Time</span>
+            <span class="meta-value" id="detail-time">—</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">
+            Stack trace
+            <button class="copy-btn" id="copy-btn">Copy</button>
+        </div>
+        <div class="stack" id="detail-stack">No stack trace available.</div>
+        <div class="hint">
+            <strong>To locate this in DevTools:</strong> Press F12 → Console tab → paste the error message into the
+            filter box at the top. Or go to Sources tab → Ctrl+P to search for the source file.
+        </div>
+    </div>
+
+    <script type="module" src="./detail.ts"></script>
+</body>
+
+</html>

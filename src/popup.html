@@ -484,6 +484,32 @@
             color: #aaa;
         }
 
+        .nav-icon {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s;
+            margin-top: 2px;
+        }
+
+        .error-item:hover .nav-icon {
+            opacity: 1;
+        }
+
+        .warn-item:hover .nav-icon {
+            opacity: 1;
+        }
+
+        .net-item:hover .nav-icon {
+            opacity: 1;
+        }
+
+        .nav-icon:hover path {
+            stroke: #A32D2D;
+        }
+
         #pane-warnings,
         #pane-network,
         #pane-settings {

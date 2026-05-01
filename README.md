@@ -11,7 +11,6 @@ Built for software testers and developers who want to catch errors without keepi
 - **JS error detection** — catches uncaught exceptions and runtime errors via the Chrome DevTools Protocol
 - **Console error & warning capture** — listens to `console.error()` and `console.warn()` calls
 - **Network failure tracking** — detects 4xx, 5xx, CORS blocks, and ERR_ failures with the actual request URL
-- **Desktop notifications** — fires a native OS notification the moment an error occurs
 - **Badge counter** — shows a red badge on the extension icon with the total error count
 - **Monitoring scope** — monitor all sites or specific sites/ports only (e.g. `localhost:8009`)
 - **Pause/resume monitoring** — toggle monitoring on and off without uninstalling

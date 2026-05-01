@@ -29,6 +29,20 @@ function formatTime(ts: number): string {
     return new Date(ts).toLocaleTimeString()
 }
 
+function openDetail(entry: ErrorEntry, category: 'error' | 'warning' | 'network') {
+    const params = new URLSearchParams({
+        category,
+        message: encodeURIComponent(entry.message),
+        source: encodeURIComponent(entry.source ?? ''),
+        line: String(entry.line ?? ''),
+        tabUrl: encodeURIComponent(entry.tabUrl),
+        timestamp: String(entry.timestamp),
+    })
+
+    const url = chrome.runtime.getURL(`src/detail.html?${params.toString()}`)
+    chrome.tabs.create({ url })
+}
+
 // --- Render errors ---
 function renderErrors(errors: ErrorEntry[]) {
     const list = document.getElementById('error-list')!
@@ -50,29 +64,40 @@ function renderErrors(errors: ErrorEntry[]) {
     badge.className = 'badge badge-red'
     dot.className = 'dot'
 
-    list.innerHTML = errors.map(e => `
-    <div class="error-item">
-      <div class="error-row">
-        <svg class="error-icon" viewBox="0 0 14 14" fill="none">
-          <circle cx="7" cy="7" r="6" fill="#FCEBEB" stroke="#F09595" stroke-width="0.8"/>
-          <text x="7" y="10.5" text-anchor="middle" font-size="9" fill="#A32D2D" font-weight="700">!</text>
-        </svg>
-        <div style="flex:1;min-width:0">
-          <div class="error-msg">${e.message.substring(0, 120)}</div>
-          <div class="error-meta">
-            ${e.source ? `<span>${e.source}${e.line !== undefined ? ':' + e.line : ''}</span>` : ''}
-            <span>${getHostname(e.tabUrl)}</span>
-            <span>${formatTime(e.timestamp)}</span>
-          </div>
+    list.innerHTML = errors.map((e, i) => `
+  <div class="error-item" data-index="${i}">
+    <div class="error-row">
+      <svg class="error-icon" viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="6" fill="#FCEBEB" stroke="#F09595" stroke-width="0.8"/>
+        <text x="7" y="10.5" text-anchor="middle" font-size="9" fill="#A32D2D" font-weight="700">!</text>
+      </svg>
+      <div style="flex:1;min-width:0">
+        <div class="error-msg">${e.message.substring(0, 120)}</div>
+        <div class="error-meta">
+          ${e.source ? `<span>${e.source}${e.line !== undefined ? ':' + e.line : ''}</span>` : ''}
+          <span>${getHostname(e.tabUrl)}</span>
+          <span>${formatTime(e.timestamp)}</span>
         </div>
       </div>
-      <div class="error-detail">${e.message}</div>
+      <svg class="nav-icon" data-index="${i}" viewBox="0 0 14 14" fill="none" title="View detail">
+        <path d="M3 7h8M7 3l4 4-4 4" stroke="#aaa" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
     </div>
-  `).join('')
+    <div class="error-detail">${e.message}</div>
+  </div>
+`).join('')
 
-    // Attach click listeners after rendering
-    list.querySelectorAll('.error-item').forEach(item => {
+    // Expand on row click, open detail on icon click
+    list.querySelectorAll('.error-item').forEach((item, i) => {
         item.addEventListener('click', () => item.classList.toggle('expanded'))
+    })
+
+    list.querySelectorAll('.nav-icon').forEach((icon) => {
+        icon.addEventListener('click', (e) => {
+            e.stopPropagation() // prevent expanding the row
+            const index = parseInt((icon as HTMLElement).dataset.index ?? '0')
+            openDetail(errors[index], 'error')
+        })
     })
 }
 
@@ -90,16 +115,32 @@ function renderWarnings(warnings: ErrorEntry[]) {
         return
     }
 
-    list.innerHTML = warnings.map(e => `
-    <div class="warn-item">
-      <div class="warn-msg">${e.message.substring(0, 120)}</div>
-      <div class="error-meta" style="margin-top:2px;font-size:11px;color:#aaa;display:flex;gap:8px;flex-wrap:wrap;">
-        ${e.source ? `<span>${e.source}</span>` : ''}
-        <span>${getHostname(e.tabUrl)}</span>
-        <span>${formatTime(e.timestamp)}</span>
+    list.innerHTML = warnings.map((e, i) => `
+    <div class="warn-item" data-index="${i}">
+      <div style="display:flex;align-items:flex-start;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <div class="warn-msg">${e.message.substring(0, 120)}</div>
+          <div class="error-meta" style="margin-top:2px;font-size:11px;color:#aaa;display:flex;gap:8px;flex-wrap:wrap;">
+            ${e.source ? `<span>${e.source}</span>` : ''}
+            <span>${getHostname(e.tabUrl)}</span>
+            <span>${formatTime(e.timestamp)}</span>
+          </div>
+        </div>
+        <svg class="nav-icon" data-index="${i}" viewBox="0 0 14 14" fill="none" title="View detail">
+          <path d="M3 7h8M7 3l4 4-4 4" stroke="#aaa" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
     </div>
   `).join('')
+
+    // Navigate icon click — open detail page
+    list.querySelectorAll('.nav-icon').forEach((icon) => {
+        icon.addEventListener('click', (e) => {
+            e.stopPropagation()
+            const index = parseInt((icon as HTMLElement).dataset.index ?? '0')
+            openDetail(warnings[index], 'warning')  // ← 'warning' passed here
+        })
+    })
 }
 
 // --- Render network ---
@@ -116,7 +157,7 @@ function renderNetwork(entries: ErrorEntry[]) {
         return
     }
 
-    list.innerHTML = entries.map(e => {
+    list.innerHTML = entries.map((e, i) => {
         const isHttp = e.message.startsWith('HTTP')
         const pillText = isHttp ? e.message.split(' ')[1] : 'ERR'
         const status = parseInt(pillText)
@@ -126,15 +167,27 @@ function renderNetwork(entries: ErrorEntry[]) {
         const displayMsg = e.source ?? e.message
 
         return `
-      <div class="net-item">
+      <div class="net-item" data-index="${i}">
         <div style="display:flex;align-items:center;gap:6px;">
           <span class="status-pill ${pillClass}">${pillText}</span>
-          <div class="net-msg">${displayMsg.substring(0, 60)}</div>
+          <div class="net-msg" style="flex:1;min-width:0;">${displayMsg.substring(0, 60)}</div>
+          <svg class="nav-icon" data-index="${i}" viewBox="0 0 14 14" fill="none" title="View detail">
+            <path d="M3 7h8M7 3l4 4-4 4" stroke="#aaa" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
         <div class="net-meta">${getHostname(e.tabUrl)} · ${formatTime(e.timestamp)}</div>
       </div>
     `
     }).join('')
+
+    // Navigate icon click — open detail page
+    list.querySelectorAll('.nav-icon').forEach((icon) => {
+        icon.addEventListener('click', (e) => {
+            e.stopPropagation()
+            const index = parseInt((icon as HTMLElement).dataset.index ?? '0')
+            openDetail(entries[index], 'network')  // ← 'network' passed here
+        })
+    })
 }
 
 // --- Render allowlist tags ---
