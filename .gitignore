@@ -1,0 +1,25 @@
+# node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# env
+.env
+.env.local
+.env.*.local
+
+# build
+dist/
+build/
+out/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# certificates and keys
+*.pem
+*.key
+*.crt

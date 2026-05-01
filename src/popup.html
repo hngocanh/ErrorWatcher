@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Error Watcher</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            width: 360px;
+            background: #fff;
+            font-size: 13px;
+        }
+
+        .popup-header {
+            padding: 10px 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .popup-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .popup-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #111;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #E24B4A;
+            display: inline-block;
+        }
+
+        .dot.ok {
+            background: #639922;
+        }
+
+        .badge {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 7px;
+            border-radius: 20px;
+        }
+
+        .badge-red {
+            background: #FCEBEB;
+            color: #A32D2D;
+        }
+
+        .badge-gray {
+            background: #f1f1f1;
+            color: #888;
+        }
+
+        .tab-row {
+            display: flex;
+        }
+
+        .tab {
+            font-size: 12px;
+            padding: 6px 12px;
+            cursor: pointer;
+            color: #888;
+            border-bottom: 2px solid transparent;
+            user-select: none;
+        }
+
+        .tab.active {
+            color: #111;
+            border-bottom: 2px solid #111;
+            font-weight: 500;
+        }
+
+        .popup-body {
+            padding: 8px 0;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .error-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+
+        .error-item:last-child {
+            border-bottom: none;
+        }
+
+        .error-item:hover {
+            background: #fafafa;
+        }
+
+        .error-item.expanded {
+            background: #fafafa;
+        }
+
+        .error-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .error-icon {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .error-msg {
+            font-size: 12px;
+            font-weight: 500;
+            color: #A32D2D;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .error-meta {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 2px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .error-detail {
+            font-size: 11px;
+            color: #555;
+            margin-top: 6px;
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 6px 8px;
+            border-radius: 4px;
+            line-height: 1.5;
+            display: none;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .error-item.expanded .error-detail {
+            display: block;
+        }
+
+        .error-item.expanded .error-msg {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: unset;
+        }
+
+        .metric-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .metric {
+            background: #f7f7f7;
+            border-radius: 6px;
+            padding: 6px 8px;
+        }
+
+        .metric-val {
+            font-size: 18px;
+            font-weight: 500;
+            color: #111;
+        }
+
+        .metric-val.red {
+            color: #A32D2D;
+        }
+
+        .metric-val.amber {
+            color: #633806;
+        }
+
+        .metric-label {
+            font-size: 10px;
+            color: #aaa;
+            margin-top: 1px;
+        }
+
+        .empty-state {
+            padding: 32px 12px;
+            text-align: center;
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        .popup-footer {
+            padding: 8px 12px;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .footer-btn {
+            font-size: 11px;
+            padding: 4px 10px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: transparent;
+            color: #666;
+        }
+
+        .footer-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .footer-btn.danger:hover {
+            background: #FCEBEB;
+            color: #A32D2D;
+            border-color: #F09595;
+        }
+
+        .toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        .toggle {
+            position: relative;
+            width: 28px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+
+        .slider {
+            position: absolute;
+            inset: 0;
+            background: #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .slider:before {
+            content: '';
+            position: absolute;
+            width: 11px;
+            height: 11px;
+            left: 2.5px;
+            top: 2.5px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .toggle input:checked+.slider {
+            background: #639922;
+        }
+
+        .toggle input:checked+.slider:before {
+            transform: translateX(12px);
+        }
+
+        .warn-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .warn-item:last-child {
+            border-bottom: none;
+        }
+
+        .warn-msg {
+            font-size: 12px;
+            font-weight: 500;
+            color: #633806;
+        }
+
+        .net-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .net-item:last-child {
+            border-bottom: none;
+        }
+
+        .net-msg {
+            font-size: 12px;
+            font-weight: 500;
+            color: #A32D2D;
+        }
+
+        .net-meta {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 2px;
+        }
+
+        .status-pill {
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        .s-500 {
+            background: #FCEBEB;
+            color: #791F1F;
+        }
+
+        .s-400 {
+            background: #FAEEDA;
+            color: #633806;
+        }
+
+        .s-cors {
+            background: #FCEBEB;
+            color: #791F1F;
+        }
+
+        /* Settings */
+        .settings-section-title {
+            font-size: 11px;
+            font-weight: 500;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 10px 12px 4px;
+        }
+
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            gap: 8px;
+        }
+
+        .settings-row:last-child {
+            border-bottom: none;
+        }
+
+        .settings-label {
+            font-size: 12px;
+            color: #111;
+        }
+
+        .settings-sub {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 1px;
+        }
+
+        .mode-btn-group {
+            display: flex;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 8px 12px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            font-size: 11px;
+            padding: 5px 8px;
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            color: #666;
+            text-align: center;
+            transition: background 0.15s;
+        }
+
+        .mode-btn.active {
+            background: #111;
+            color: #fff;
+        }
+
+        /* Allowlist */
+        .allowlist-wrap {
+            padding: 0 12px 8px;
+            display: none;
+        }
+
+        .allowlist-wrap.visible {
+            display: block;
+        }
+
+        .allowlist-input-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .allowlist-input {
+            flex: 1;
+            font-size: 12px;
+            padding: 5px 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            outline: none;
+        }
+
+        .allowlist-input:focus {
+            border-color: #aaa;
+        }
+
+        .allowlist-add-btn {
+            font-size: 11px;
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: transparent;
+            color: #444;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .allowlist-add-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .allowlist-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .allowlist-tag {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            padding: 3px 7px;
+            color: #333;
+        }
+
+        .allowlist-tag-remove {
+            cursor: pointer;
+            color: #aaa;
+            font-size: 13px;
+            line-height: 1;
+        }
+
+        .allowlist-tag-remove:hover {
+            color: #A32D2D;
+        }
+
+        .allowlist-empty {
+            font-size: 11px;
+            color: #aaa;
+        }
+
+        #pane-warnings,
+        #pane-network,
+        #pane-settings {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="popup-header">
+        <div class="popup-header-row">
+            <div class="popup-title">
+                <span class="dot" id="status-dot"></span>
+                Error Watcher
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span class="badge badge-gray" id="error-badge">0 errors</span>
+                <button class="footer-btn" id="tab-settings-btn">Settings</button>
+            </div>
+        </div>
+        <div class="tab-row">
+            <div class="tab active" id="tab-errors">Errors</div>
+            <div class="tab" id="tab-warnings">Warnings</div>
+            <div class="tab" id="tab-network">Network</div>
+        </div>
+    </div>
+
+    <!-- Errors pane -->
+    <div id="pane-errors">
+        <div class="metric-row">
+            <div class="metric">
+                <div class="metric-val red" id="m-err">0</div>
+                <div class="metric-label">JS errors</div>
+            </div>
+            <div class="metric">
+                <div class="metric-val amber" id="m-warn">0</div>
+                <div class="metric-label">Warnings</div>
+            </div>
+            <div class="metric">
+                <div class="metric-val red" id="m-net">0</div>
+                <div class="metric-label">Net failures</div>
+            </div>
+        </div>
+        <div class="popup-body" id="error-list">
+            <div class="empty-state">No errors recorded yet.</div>
+        </div>
+        <div class="popup-footer">
+            <div class="toggle-wrap">
+                <label class="toggle">
+                    <input type="checkbox" checked id="monitor-toggle">
+                    <span class="slider"></span>
+                </label>
+                <span id="monitor-label">Monitoring on</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+                <button class="footer-btn danger" id="clear-btn">Clear</button>
+                <button class="footer-btn danger" id="clear-all-btn">Clear All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Warnings pane -->
+    <div id="pane-warnings">
+        <div class="popup-body" id="warn-list">
+            <div class="empty-state">No warnings recorded yet.</div>
+        </div>
+        <div class="popup-footer">
+            <span style="font-size:11px;color:#aaa;" id="warn-count">0 warnings</span>
+            <button class="footer-btn danger" id="clear-warn-btn">Clear</button>
+        </div>
+    </div>
+
+    <!-- Network pane -->
+    <div id="pane-network">
+        <div class="popup-body" id="net-list">
+            <div class="empty-state">No network failures recorded yet.</div>
+        </div>
+        <div class="popup-footer">
+            <span style="font-size:11px;color:#aaa;" id="net-count">0 failures</span>
+            <button class="footer-btn danger" id="clear-net-btn">Clear</button>
+        </div>
+    </div>
+
+    <!-- Settings pane -->
+    <div id="pane-settings">
+
+        <div class="settings-section-title">Monitoring scope</div>
+
+        <div class="mode-btn-group">
+            <div class="mode-btn active" id="mode-all">All sites</div>
+            <div class="mode-btn" id="mode-specific">Specific sites only</div>
+        </div>
+
+        <div class="allowlist-wrap" id="allowlist-wrap">
+            <div class="allowlist-input-row">
+                <input class="allowlist-input" id="allowlist-input" type="text" placeholder="e.g. myapp.com" />
+                <button class="allowlist-add-btn" id="allowlist-add-btn">Add</button>
+            </div>
+            <div class="allowlist-tags" id="allowlist-tags">
+                <span class="allowlist-empty" id="allowlist-empty">No sites added yet.</span>
+            </div>
+        </div>
+
+        <div class="settings-section-title">Capture</div>
+
+        <div class="settings-row">
+            <div>
+                <div class="settings-label">JS exceptions</div>
+                <div class="settings-sub">Runtime.exceptionThrown</div>
+            </div>
+            <label class="toggle"><input type="checkbox" checked id="s-js"><span class="slider"></span></label>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-label">Console errors</div>
+                <div class="settings-sub">Log.entryAdded level=error</div>
+            </div>
+            <label class="toggle"><input type="checkbox" checked id="s-console"><span class="slider"></span></label>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-label">Console warnings</div>
+                <div class="settings-sub">Log.entryAdded level=warn</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="s-warn"><span class="slider"></span></label>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-label">Network failures</div>
+                <div class="settings-sub">4xx, 5xx, CORS blocks</div>
+            </div>
+            <label class="toggle"><input type="checkbox" checked id="s-network"><span class="slider"></span></label>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-label">Desktop notifications</div>
+                <div class="settings-sub">chrome.notifications popups</div>
+            </div>
+            <label class="toggle"><input type="checkbox" checked id="s-notif"><span class="slider"></span></label>
+        </div>
+
+    </div>
+
+    <script type="module" src="./popup.ts"></script>
+</body>
+
+</html>
