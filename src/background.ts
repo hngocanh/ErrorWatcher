@@ -24,9 +24,25 @@ function isAllowed(url: string, config: { [key: string]: any }): boolean {
     if (config.mode === 'all') return true
     const allowlist = config.allowlist as string[]
     if (allowlist.length === 0) return false
-    const hostname = getHostname(url)
+
+    let hostname = ''
+    let host = ''
+    try {
+        const parsed = new URL(url)
+        hostname = parsed.hostname  // e.g. "localhost"
+        host = parsed.host          // e.g. "localhost:8009"
+    } catch {
+        return false
+    }
+
     if (!hostname) return false
-    return allowlist.some(domain => hostname.includes(domain))
+
+    return allowlist.some(domain => {
+        // Match against both host (with port) and hostname (without port)
+        // This way "localhost" matches all localhost ports
+        // and "localhost:8009" matches only that specific port
+        return host.includes(domain) || hostname.includes(domain)
+    })
 }
 
 // Attach debugger to a single tab
