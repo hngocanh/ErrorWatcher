@@ -15,18 +15,31 @@ chrome.storage.local.get({ errors: [], warnings: [], network: [] }, (data) => {
 })
 
 // Helper to get hostname safely
-function getHostname(url: string): string {
+export function getHostname(url: string): string {
     try { return new URL(url).hostname } catch { return '' }
 }
 
+export function isInternalUrl(url: string): boolean {
+    return (
+        url.startsWith('chrome://') ||
+        url.startsWith('edge://') ||
+        url.startsWith('brave://') ||
+        url.startsWith('moz-extension://') ||
+        url.startsWith('about:') ||
+        url.startsWith('chrome-extension://') ||
+        url.startsWith('edge-extension://') ||
+        url.startsWith('brave-extension://')
+    )
+}
+
 // Check if a URL is allowed based on current config
-function isAllowed(url: string, config: { [key: string]: any }): boolean {
+export function isAllowed(url: string, config: { [key: string]: any }): boolean {
     // Never monitor extension's own pages
     if (url.startsWith('chrome-extension://')) return false
     if (url.startsWith('moz-extension://')) return false
 
-    if (config.mode === 'all') return true
-    const allowlist = config.allowlist as string[]
+    if (!config || config.mode === 'all') return true
+    const allowlist = Array.isArray(config.allowlist) ? config.allowlist : []
     if (allowlist.length === 0) return false
 
     let hostname = ''
@@ -40,11 +53,19 @@ function isAllowed(url: string, config: { [key: string]: any }): boolean {
     }
 
     if (!hostname) return false
-    return allowlist.some(domain => host.includes(domain) || hostname.includes(domain))
+
+    // Normalize allowlist entries and compare case-insensitively
+    const normalizedHost = host.toLowerCase()
+    const normalizedHostname = hostname.toLowerCase()
+
+    return allowlist.some(rawDomain => {
+        const domain = String(rawDomain).trim().toLowerCase()
+        return normalizedHost.includes(domain) || normalizedHostname.includes(domain)
+    })
 }
 
 // Attach debugger to a single tab
-function attachToTab(tabId: number, url: string, config: { [key: string]: any }) {
+export function attachToTab(tabId: number, url: string, config: { [key: string]: any }) {
     if (attachedTabs.has(tabId)) return
     if (url.startsWith('chrome-extension://')) return  // add this
     if (url.startsWith('moz-extension://')) return      // add this
@@ -60,7 +81,7 @@ function attachToTab(tabId: number, url: string, config: { [key: string]: any })
 }
 
 // Detach debugger from a single tab
-function detachFromTab(tabId: number) {
+export function detachFromTab(tabId: number) {
     if (!attachedTabs.has(tabId)) return
     chrome.debugger.detach({ tabId }, () => {
         if (chrome.runtime.lastError) return
@@ -69,7 +90,7 @@ function detachFromTab(tabId: number) {
 }
 
 // Re-evaluate all open tabs against current config
-function syncAllTabs() {
+export function syncAllTabs() {
     chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
         chrome.tabs.query({}, (tabs) => {
             tabs.forEach(tab => {
@@ -302,7 +323,7 @@ chrome.debugger.onEvent.addListener((source, method, params: any) => {
 })
 
 // Save entry to storage under a given key
-function saveToStorage(key: 'errors' | 'warnings' | 'network', entry: ErrorEntry) {
+export function saveToStorage(key: 'errors' | 'warnings' | 'network', entry: ErrorEntry) {
     chrome.storage.local.get({ errors: [], warnings: [], network: [] }, (data) => {
         const items: ErrorEntry[] = (data[key] as ErrorEntry[]) ?? []
         items.unshift(entry)
@@ -318,7 +339,7 @@ function saveToStorage(key: 'errors' | 'warnings' | 'network', entry: ErrorEntry
 }
 
 // Update the extension icon badge
-function updateBadge(count: number) {
+export function updateBadge(count: number) {
     if (count === 0) {
         chrome.action.setBadgeText({ text: '' })
     } else {
@@ -328,7 +349,7 @@ function updateBadge(count: number) {
 }
 
 // Fire a desktop notification
-function sendNotification(title: string, message: string, tabUrl: string) {
+export function sendNotification(title: string, message: string, tabUrl: string) {
     let hostname = tabUrl
     try { hostname = new URL(tabUrl).hostname } catch { /* ignore */ }
 

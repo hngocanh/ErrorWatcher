@@ -23,3 +23,6 @@ out/
 *.pem
 *.key
 *.crt
+
+# tests
+coverage/
