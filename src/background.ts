@@ -21,6 +21,10 @@ function getHostname(url: string): string {
 
 // Check if a URL is allowed based on current config
 function isAllowed(url: string, config: { [key: string]: any }): boolean {
+    // Never monitor extension's own pages
+    if (url.startsWith('chrome-extension://')) return false
+    if (url.startsWith('moz-extension://')) return false
+
     if (config.mode === 'all') return true
     const allowlist = config.allowlist as string[]
     if (allowlist.length === 0) return false
@@ -29,25 +33,21 @@ function isAllowed(url: string, config: { [key: string]: any }): boolean {
     let host = ''
     try {
         const parsed = new URL(url)
-        hostname = parsed.hostname  // e.g. "localhost"
-        host = parsed.host          // e.g. "localhost:8009"
+        hostname = parsed.hostname
+        host = parsed.host
     } catch {
         return false
     }
 
     if (!hostname) return false
-
-    return allowlist.some(domain => {
-        // Match against both host (with port) and hostname (without port)
-        // This way "localhost" matches all localhost ports
-        // and "localhost:8009" matches only that specific port
-        return host.includes(domain) || hostname.includes(domain)
-    })
+    return allowlist.some(domain => host.includes(domain) || hostname.includes(domain))
 }
 
 // Attach debugger to a single tab
 function attachToTab(tabId: number, url: string, config: { [key: string]: any }) {
     if (attachedTabs.has(tabId)) return
+    if (url.startsWith('chrome-extension://')) return  // add this
+    if (url.startsWith('moz-extension://')) return      // add this
     if (!isAllowed(url, config)) return
 
     chrome.debugger.attach({ tabId }, '1.3', () => {
@@ -95,7 +95,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // Stage 1 — fires the moment URL changes, before page loads
     if (changeInfo.url) {
         const url = changeInfo.url
-        if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')) {
+        if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('chrome-extension://') || url.startsWith('edge-extension://')) {
             detachFromTab(tabId)
             return
         }
@@ -114,7 +114,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
         const url = tab.url
         if (!url) return
-        if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')) return
+        if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('brave://')) return
+        if (url.startsWith('chrome-extension://') || url.startsWith('edge-extension://')) return
 
         chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
             const allowed = isAllowed(url, config)

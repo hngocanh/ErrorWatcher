@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Error Watcher",
     "version": "1.0.0",
-    "description": "Notifies you when console errors appear in any tab.",
+    "description": "Monitors web pages for JavaScript errors, console warnings, and network failures.",
     "content_security_policy": {
         "extension_pages": "script-src 'self'; object-src 'self'"
     },

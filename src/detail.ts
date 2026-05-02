@@ -1,10 +1,10 @@
 // Read the error data passed via URL query params
 const params = new URLSearchParams(window.location.search)
 const category = params.get('category') ?? 'error'
-const message = decodeURIComponent(params.get('message') ?? '')
-const source = decodeURIComponent(params.get('source') ?? '')
+const message = params.get('message') ?? ''
+const source = params.get('source') ?? ''
 const line = params.get('line') ?? ''
-const tabUrl = decodeURIComponent(params.get('tabUrl') ?? '')
+const tabUrl = params.get('tabUrl') ?? ''
 const timestamp = parseInt(params.get('timestamp') ?? '0')
 
 // Error type pill
@@ -52,5 +52,14 @@ document.getElementById('copy-btn')!.addEventListener('click', () => {
             btn.textContent = 'Copy'
             btn.classList.remove('copied')
         }, 2000)
+    })
+})
+
+// Close button
+document.querySelector('.back')!.addEventListener('click', () => {
+    chrome.tabs.getCurrent((tab) => {
+        if (tab?.id !== undefined) {
+            chrome.tabs.remove(tab.id)
+        }
     })
 })

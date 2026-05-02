@@ -30,16 +30,19 @@ function formatTime(ts: number): string {
 }
 
 function openDetail(entry: ErrorEntry, category: 'error' | 'warning' | 'network') {
+    console.log('openDetail called:', { entry, category }) // debug line
+
     const params = new URLSearchParams({
         category,
-        message: encodeURIComponent(entry.message),
-        source: encodeURIComponent(entry.source ?? ''),
+        message: entry.message,
+        source: entry.source ?? '',
         line: String(entry.line ?? ''),
-        tabUrl: encodeURIComponent(entry.tabUrl),
+        tabUrl: entry.tabUrl,
         timestamp: String(entry.timestamp),
     })
 
     const url = chrome.runtime.getURL(`src/detail.html?${params.toString()}`)
+    console.log('opening URL:', url) // debug line
     chrome.tabs.create({ url })
 }
 
