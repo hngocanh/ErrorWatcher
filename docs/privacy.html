@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Privacy Policy — Error Watcher</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            max-width: 900px;
+            margin: 48px auto;
+            padding: 0 20px;
+            color: #111;
+            line-height: 1.6
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #0b4;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 6px
+        }
+
+        .muted {
+            color: #555;
+            font-size: 14px
+        }
+
+        pre {
+            background: #f6f8fa;
+            padding: 12px;
+            border-radius: 6px;
+            overflow: auto
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 8px 0
+        }
+
+        th,
+        td {
+            border: 1px solid #e1e4e8;
+            padding: 8px;
+            text-align: left
+        }
+
+        a {
+            color: #0366d6
+        }
+
+        .section {
+            margin-top: 28px
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Privacy Policy — Error Watcher</h1>
+    <div class="muted">Last updated: May 2026</div>
+
+    <p class="section">Error Watcher is designed with privacy first. <strong>All error data stays on your
+            device</strong> — we don't collect, store, analyze, or share any of your information. The extension operates
+        entirely locally and sends no data to external servers.</p>
+
+    <ul>
+        <li>✅ No analytics or tracking</li>
+        <li>✅ No third-party services</li>
+        <li>✅ No data collection or transmission</li>
+        <li>✅ No advertisements</li>
+        <li>✅ You have complete control over your error logs</li>
+    </ul>
+
+    <h2 class="section">What Data We Collect</h2>
+    <p>Error Watcher monitors and stores the following information <strong>locally on your device</strong>:</p>
+
+    <h3>JavaScript Errors</h3>
+    <ul>
+        <li>Error messages and error types</li>
+        <li>Full stack traces (including file paths and line numbers)</li>
+        <li>Timestamp of when the error occurred</li>
+        <li>URL of the tab where the error happened</li>
+    </ul>
+
+    <h3>Console Warnings &amp; Errors</h3>
+    <ul>
+        <li>Messages from <code>console.error()</code> and <code>console.warn()</code></li>
+        <li>Timestamp of each message</li>
+        <li>Tab URL where the message originated</li>
+    </ul>
+
+    <h3>Network Failures</h3>
+    <ul>
+        <li>Failed request URLs (4xx, 5xx, CORS, ERR_ failures)</li>
+        <li>HTTP status codes and failure type</li>
+        <li>Timestamp and originating tab URL</li>
+    </ul>
+
+    <h3>User Settings &amp; Preferences</h3>
+    <ul>
+        <li>Monitoring scope (all sites or specific sites/ports)</li>
+        <li>Toggle states for each error category</li>
+        <li>Desktop notification preference</li>
+    </ul>
+
+    <h2 class="section">How Data Is Stored</h2>
+    <p>All data is stored <strong>exclusively on your device</strong> using the browser's
+        <code>chrome.storage.local</code> API:</p>
+    <ul>
+        <li>Data persists between browser sessions until you manually clear it</li>
+        <li>Each browser profile maintains separate data</li>
+        <li>No data is synchronized to the cloud</li>
+        <li>No backups are created</li>
+    </ul>
+
+    <h2 class="section">Browser Permissions Explained</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Permission</th>
+                <th>Purpose</th>
+                <th>Data Impact</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>debugger</strong></td>
+                <td>Access DevTools Protocol to capture JS errors</td>
+                <td>Raw error info processed locally; not sent externally</td>
+            </tr>
+            <tr>
+                <td><strong>notifications</strong></td>
+                <td>Send desktop alerts when errors are detected</td>
+                <td>Used only to display notifications; not stored</td>
+            </tr>
+            <tr>
+                <td><strong>tabs</strong></td>
+                <td>Identify which tab has an error</td>
+                <td>Tab URLs stored in local error log; cleared by user</td>
+            </tr>
+            <tr>
+                <td><strong>storage</strong></td>
+                <td>Save monitoring settings and error logs</td>
+                <td>All data stored in browser local storage only</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2 class="section">Data Retention &amp; Deletion</h2>
+    <ul>
+        <li>Retention: Error logs are retained until you manually clear them</li>
+        <li>Clear individual categories or all errors at once</li>
+        <li>No auto-delete; uninstalling removes stored data</li>
+    </ul>
+
+    <h2 class="section">Third-Party Services</h2>
+    <p><strong>Error Watcher does not use any third-party services.</strong></p>
+    <ul>
+        <li>No analytics platforms</li>
+        <li>No crash reporting services</li>
+        <li>No external APIs, webhooks, or ad networks</li>
+    </ul>
+
+    <h2 class="section">User Control &amp; Privacy Settings</h2>
+    <ul>
+        <li>Pause/resume monitoring without uninstalling</li>
+        <li>Per-category toggles for JS errors, console captures, network failures, and notifications</li>
+        <li>Monitoring scope: all sites or specific domains/ports</li>
+    </ul>
+
+    <h2 class="section">Data Security</h2>
+    <p>Security depends on your browser and device. We do not transmit data off-device.</p>
+
+    <h2 class="section">Children &amp; COPPA Compliance</h2>
+    <p>Not directed at children under 13. We do not knowingly collect data from children.</p>
+
+    <h2 class="section">Changes to This Privacy Policy</h2>
+    <p>Policy updates will be published with new extension versions. Material changes will be highlighted.</p>
+
+    <h2 class="section">Contact &amp; Support</h2>
+    <p>Email: <a href="mailto:hoangngocanh288@gmail.com">hoangngocanh288@gmail.com</a></p>
+    <p>GitHub Issues: <a
+            href="https://github.com/hngocanh/ErrorWatcher/issues">https://github.com/hngocanh/ErrorWatcher/issues</a>
+    </p>
+
+    <hr />
+    <p class="muted">TL;DR: All error data stays on your device. Nothing is sent to external servers.</p>
+</body>
+
+</html>
