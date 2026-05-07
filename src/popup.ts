@@ -230,7 +230,7 @@ function renderAllowlist(allowlist: string[]) {
 // --- Load settings ---
 function loadSettings() {
     chrome.storage.local.get(
-        { mode: 'all', allowlist: [], captureJs: true, captureConsole: true, captureWarnings: false, captureNetwork: true, notifications: true },
+        { mode: 'all', allowlist: [], captureJs: true, captureConsole: true, captureWarnings: false, captureNetwork: true, notifications: false },
         (data) => {
             const mode = data.mode as string
 
@@ -345,8 +345,15 @@ document.getElementById('allowlist-add-btn')!.addEventListener('click', () => {
     const value = input.value.trim().toLowerCase()
     if (!value) return
 
-    // Strip protocol if user typed it
-    const domain = value.replace(/^https?:\/\//, '').split('/')[0]
+    let domain: string
+
+    // Port-only entry e.g. ":8009" or "8009"
+    if (/^:?\d+$/.test(value)) {
+        domain = value.startsWith(':') ? value : `:${value}`
+    } else {
+        // Strip protocol and path, keep host:port
+        domain = value.replace(/^https?:\/\//, '').split('/')[0]
+    }
 
     chrome.storage.local.get({ allowlist: [] }, (data) => {
         const list = data.allowlist as string[]
