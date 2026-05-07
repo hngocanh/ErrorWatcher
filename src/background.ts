@@ -34,33 +34,36 @@ export function isInternalUrl(url: string): boolean {
 
 // Check if a URL is allowed based on current config
 export function isAllowed(url: string, config: { [key: string]: any }): boolean {
-    // Never monitor extension's own pages
     if (url.startsWith('chrome-extension://')) return false
     if (url.startsWith('moz-extension://')) return false
+    if (isInternalUrl(url)) return false
+    if (config.mode === 'all') return true
 
-    if (!config || config.mode === 'all') return true
-    const allowlist = Array.isArray(config.allowlist) ? config.allowlist : []
+    const allowlist = config.allowlist as string[]
     if (allowlist.length === 0) return false
 
     let hostname = ''
     let host = ''
+    let port = ''
+
     try {
         const parsed = new URL(url)
-        hostname = parsed.hostname
-        host = parsed.host
+        hostname = parsed.hostname  // e.g. "localhost"
+        host = parsed.host          // e.g. "localhost:8009"
+        port = parsed.port          // e.g. "8009"
     } catch {
         return false
     }
 
     if (!hostname) return false
 
-    // Normalize allowlist entries and compare case-insensitively
-    const normalizedHost = host.toLowerCase()
-    const normalizedHostname = hostname.toLowerCase()
-
-    return allowlist.some(rawDomain => {
-        const domain = String(rawDomain).trim().toLowerCase()
-        return normalizedHost.includes(domain) || normalizedHostname.includes(domain)
+    return allowlist.some(domain => {
+        // Port-only entry e.g. ":8009" — match any site on that port
+        if (domain.startsWith(':')) {
+            return port === domain.slice(1)
+        }
+        // Normal domain or host:port match
+        return host.includes(domain) || hostname.includes(domain)
     })
 }
 
@@ -91,20 +94,35 @@ export function detachFromTab(tabId: number) {
 
 // Re-evaluate all open tabs against current config
 export function syncAllTabs() {
-    chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
-        chrome.tabs.query({}, (tabs) => {
-            tabs.forEach(tab => {
-                if (!tab.id || !tab.url) return
-                const url = tab.url
-                if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')) return
+    chrome.storage.session.get({ paused: false }, (sessionData) => {
+        // If paused, detach from everything
+        if (sessionData.paused) {
+            chrome.tabs.query({}, (tabs) => {
+                tabs.forEach(tab => {
+                    if (tab.id && attachedTabs.has(tab.id)) {
+                        detachFromTab(tab.id)
+                    }
+                })
+            })
+            return
+        }
 
-                const shouldMonitor = isAllowed(url, config)
+        // If not paused, sync normally
+        chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
+            chrome.tabs.query({}, (tabs) => {
+                tabs.forEach(tab => {
+                    if (!tab.id || !tab.url) return
+                    const url = tab.url
+                    if (isInternalUrl(url)) return
 
-                if (shouldMonitor && !attachedTabs.has(tab.id)) {
-                    attachToTab(tab.id, url, config)
-                } else if (!shouldMonitor && attachedTabs.has(tab.id)) {
-                    detachFromTab(tab.id)
-                }
+                    const shouldMonitor = isAllowed(url, config)
+
+                    if (shouldMonitor && !attachedTabs.has(tab.id)) {
+                        attachToTab(tab.id, url, config)
+                    } else if (!shouldMonitor && attachedTabs.has(tab.id)) {
+                        detachFromTab(tab.id)
+                    }
+                })
             })
         })
     })
@@ -116,18 +134,25 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // Stage 1 — fires the moment URL changes, before page loads
     if (changeInfo.url) {
         const url = changeInfo.url
-        if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('chrome-extension://') || url.startsWith('edge-extension://')) {
+        if (isInternalUrl(url)) {
             detachFromTab(tabId)
             return
         }
 
-        chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
-            if (config.mode === 'specific' && !isAllowed(url, config)) {
+        chrome.storage.session.get({ paused: false }, (sessionData) => {
+            if (sessionData.paused) {
+                // Monitoring is paused — detach if currently attached
                 detachFromTab(tabId)
-            } else if (config.mode === 'specific' && isAllowed(url, config) && !attachedTabs.has(tabId)) {
-                // In specific mode, attach early once we know the URL is allowed
-                attachToTab(tabId, url, config)
+                return
             }
+
+            chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
+                if (config.mode === 'specific' && !isAllowed(url, config)) {
+                    detachFromTab(tabId)
+                } else if (config.mode === 'specific' && isAllowed(url, config) && !attachedTabs.has(tabId)) {
+                    attachToTab(tabId, url, config)
+                }
+            })
         })
     }
 
@@ -135,24 +160,29 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
         const url = tab.url
         if (!url) return
-        if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('brave://')) return
-        if (url.startsWith('chrome-extension://') || url.startsWith('edge-extension://')) return
+        if (isInternalUrl(url)) return
 
-        chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
-            const allowed = isAllowed(url, config)
-
-            if (allowed && !attachedTabs.has(tabId)) {
-                // Not yet attached — attach now
-                attachToTab(tabId, url, config)
-            } else if (allowed && attachedTabs.has(tabId)) {
-                // Already attached from onCreated or previous load — re-attach cleanly for reload
-                chrome.debugger.detach({ tabId }, () => {
-                    attachedTabs.delete(tabId)
-                    attachToTab(tabId, url, config)
-                })
-            } else if (!allowed) {
+        chrome.storage.session.get({ paused: false }, (sessionData) => {
+            if (sessionData.paused) {
+                // Monitoring is paused — ensure debugger is not attached
                 detachFromTab(tabId)
+                return
             }
+
+            chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
+                const allowed = isAllowed(url, config)
+
+                if (allowed && !attachedTabs.has(tabId)) {
+                    attachToTab(tabId, url, config)
+                } else if (allowed && attachedTabs.has(tabId)) {
+                    chrome.debugger.detach({ tabId }, () => {
+                        attachedTabs.delete(tabId)
+                        attachToTab(tabId, url, config)
+                    })
+                } else if (!allowed) {
+                    detachFromTab(tabId)
+                }
+            })
         })
     }
 })
@@ -180,18 +210,20 @@ chrome.debugger.onDetach.addListener((source) => {
 chrome.tabs.onCreated.addListener((tab) => {
     if (!tab.id) return
 
-    chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
-        // In all-sites mode, attach immediately even before URL is known
-        if (config.mode === 'all') {
-            chrome.debugger.attach({ tabId: tab.id! }, '1.3', () => {
-                if (chrome.runtime.lastError) return
-                chrome.debugger.sendCommand({ tabId: tab.id! }, 'Runtime.enable')
-                chrome.debugger.sendCommand({ tabId: tab.id! }, 'Log.enable')
-                chrome.debugger.sendCommand({ tabId: tab.id! }, 'Network.enable')
-                attachedTabs.add(tab.id!)
-            })
-        }
-        // In specific-sites mode we wait for the URL to be known in onUpdated
+    chrome.storage.session.get({ paused: false }, (sessionData) => {
+        if (sessionData.paused) return  // add this check
+
+        chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
+            if (config.mode === 'all') {
+                chrome.debugger.attach({ tabId: tab.id! }, '1.3', () => {
+                    if (chrome.runtime.lastError) return
+                    chrome.debugger.sendCommand({ tabId: tab.id! }, 'Runtime.enable')
+                    chrome.debugger.sendCommand({ tabId: tab.id! }, 'Log.enable')
+                    chrome.debugger.sendCommand({ tabId: tab.id! }, 'Network.enable')
+                    attachedTabs.add(tab.id!)
+                })
+            }
+        })
     })
 })
 
@@ -204,7 +236,7 @@ chrome.debugger.onEvent.addListener((source, method, params: any) => {
         if (sessionData.paused) return
 
         chrome.storage.local.get(
-            { mode: 'all', allowlist: [], captureJs: true, captureConsole: true, captureWarnings: false, captureNetwork: true, notifications: true },
+            { mode: 'all', allowlist: [], captureJs: true, captureConsole: true, captureWarnings: false, captureNetwork: true, notifications: false },
             (config) => {
 
                 // JS exceptions
@@ -366,7 +398,25 @@ export function sendNotification(title: string, message: string, tabUrl: string)
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'PAUSE_MONITORING') {
-        chrome.storage.session.set({ paused: message.value })
+        const paused = message.value as boolean
+        chrome.storage.session.set({ paused }, () => {
+            if (paused) {
+                // Detach from all tabs when pausing
+                chrome.tabs.query({}, (tabs) => {
+                    tabs.forEach(tab => {
+                        if (tab.id && attachedTabs.has(tab.id)) {
+                            chrome.debugger.detach({ tabId: tab.id }, () => {
+                                if (chrome.runtime.lastError) return
+                                attachedTabs.delete(tab.id!)
+                            })
+                        }
+                    })
+                })
+            } else {
+                // Re-attach to all relevant tabs when resuming
+                syncAllTabs()
+            }
+        })
         sendResponse({ ok: true })
     }
 
