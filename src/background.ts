@@ -43,6 +43,24 @@ chrome.storage.local.get(
     }
 )
 
+// Restore paused state on service worker startup (persisted across browser restarts)
+chrome.storage.local.get({ pausedPersistent: false }, (d) => {
+    const pausedPersistent = Boolean(d.pausedPersistent)
+    chrome.storage.session.set({ paused: pausedPersistent }, () => {
+        if (pausedPersistent) {
+            // Ensure we are detached from any tabs if previously paused
+            chrome.tabs.query({}, (tabs) => {
+                tabs.forEach(tab => {
+                    if (tab.id && attachedTabs.has(tab.id)) detachFromTab(tab.id)
+                })
+            })
+        } else {
+            // Otherwise sync to current config and attach as needed
+            syncAllTabs()
+        }
+    })
+})
+
 // Helper to get hostname safely
 export function getHostname(url: string): string {
     try { return new URL(url).hostname } catch { return '' }
@@ -435,24 +453,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'PAUSE_MONITORING') {
         const paused = message.value as boolean
         chrome.storage.session.set({ paused }, () => {
-            if (paused) {
-                // Detach from all tabs when pausing
-                chrome.tabs.query({}, (tabs) => {
-                    tabs.forEach(tab => {
-                        if (tab.id && attachedTabs.has(tab.id)) {
-                            chrome.debugger.detach({ tabId: tab.id }, () => {
-                                if (chrome.runtime.lastError) return
-                                attachedTabs.delete(tab.id!)
-                            })
-                        }
+            // Persist pause state across restarts
+            chrome.storage.local.set({ pausedPersistent: paused }, () => {
+                if (paused) {
+                    // Detach from all tabs when pausing
+                    chrome.tabs.query({}, (tabs) => {
+                        tabs.forEach(tab => {
+                            if (tab.id && attachedTabs.has(tab.id)) {
+                                chrome.debugger.detach({ tabId: tab.id }, () => {
+                                    if (chrome.runtime.lastError) return
+                                    attachedTabs.delete(tab.id!)
+                                })
+                            }
+                        })
                     })
-                })
-            } else {
-                // Re-attach to all relevant tabs when resuming
-                syncAllTabs()
-            }
+                } else {
+                    // Re-attach to all relevant tabs when resuming
+                    syncAllTabs()
+                }
+                sendResponse({ ok: true })
+            })
         })
-        sendResponse({ ok: true })
     }
 
     if (message.type === 'SET_MODE') {
