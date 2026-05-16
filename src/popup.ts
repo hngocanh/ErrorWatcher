@@ -30,7 +30,7 @@ function formatTime(ts: number): string {
 }
 
 function openDetail(entry: ErrorEntry, category: 'error' | 'warning' | 'network') {
-    console.log('openDetail called:', { entry, category }) // debug line
+    // debug logs removed
 
     const params = new URLSearchParams({
         category,
@@ -42,66 +42,94 @@ function openDetail(entry: ErrorEntry, category: 'error' | 'warning' | 'network'
     })
 
     const url = chrome.runtime.getURL(`src/detail.html?${params.toString()}`)
-    console.log('opening URL:', url) // debug line
     chrome.tabs.create({ url })
+}
+
+function escapeHtml(s: string) {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+}
+
+function updateHeaderBadge(total?: number) {
+    const badge = document.getElementById('error-badge')
+    if (!badge) return
+
+    if (typeof total !== 'number') {
+        chrome.storage.local.get({ errors: [], warnings: [], network: [] }, data => {
+            const t =
+                (data.errors as ErrorEntry[]).length +
+                (data.warnings as ErrorEntry[]).length +
+                (data.network as ErrorEntry[]).length
+            updateHeaderBadge(t)
+        })
+        return
+    }
+
+    if (total === 0) {
+        badge.textContent = '0 errors'
+        badge.className = 'badge badge-gray'
+    } else {
+        badge.textContent = `${total} error${total > 1 ? 's' : ''}`
+        badge.className = 'badge badge-red'
+    }
+    // also request background to update the browser action badge (single source of truth)
+    try {
+        chrome.runtime.sendMessage({ type: 'UPDATE_BADGE', total })
+    } catch { }
 }
 
 // --- Render errors ---
 function renderErrors(errors: ErrorEntry[]) {
     const list = document.getElementById('error-list')!
-    const badge = document.getElementById('error-badge')!
     const mErr = document.getElementById('m-err')!
     const dot = document.getElementById('status-dot')!
 
     mErr.textContent = String(errors.length)
+    dot.className = errors.length > 0 ? 'dot' : 'dot ok'
 
     if (errors.length === 0) {
         list.innerHTML = '<div class="empty-state">No errors recorded yet.</div>'
-        badge.textContent = '0 errors'
-        badge.className = 'badge badge-gray'
-        dot.className = 'dot ok'
-        return
+    } else {
+        list.innerHTML = errors.map((e, i) => `
+      <div class="error-item" data-index="${i}">
+        <div class="error-row">
+          <svg class="error-icon" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="6" fill="#FCEBEB" stroke="#F09595" stroke-width="0.8"/>
+            <text x="7" y="10.5" text-anchor="middle" font-size="9" fill="#A32D2D" font-weight="700">!</text>
+          </svg>
+          <div style="flex:1;min-width:0">
+                        <div class="error-msg">${escapeHtml(e.message.substring(0, 120))}</div>
+            <div class="error-meta">
+                            ${e.source ? `<span>${escapeHtml(e.source)}${e.line !== undefined ? ':' + e.line : ''}</span>` : ''}
+                            <span>${escapeHtml(getHostname(e.tabUrl))}</span>
+                            <span>${escapeHtml(formatTime(e.timestamp))}</span>
+            </div>
+          </div>
+          <svg class="nav-icon" data-index="${i}" viewBox="0 0 14 14" fill="none" title="View detail">
+            <path d="M3 7h8M7 3l4 4-4 4" stroke="#aaa" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+                <div class="error-detail">${escapeHtml(e.message)}</div>
+      </div>
+    `).join('')
+
+        list.querySelectorAll('.error-item').forEach(item => {
+            item.addEventListener('click', () => item.classList.toggle('expanded'))
+        })
+
+        list.querySelectorAll('.nav-icon').forEach(icon => {
+            icon.addEventListener('click', e => {
+                e.stopPropagation()
+                const index = parseInt((icon as HTMLElement).dataset.index ?? '0')
+                openDetail(errors[index], 'error')
+            })
+        })
     }
 
-    badge.textContent = `${errors.length} error${errors.length > 1 ? 's' : ''}`
-    badge.className = 'badge badge-red'
-    dot.className = 'dot'
-
-    list.innerHTML = errors.map((e, i) => `
-  <div class="error-item" data-index="${i}">
-    <div class="error-row">
-      <svg class="error-icon" viewBox="0 0 14 14" fill="none">
-        <circle cx="7" cy="7" r="6" fill="#FCEBEB" stroke="#F09595" stroke-width="0.8"/>
-        <text x="7" y="10.5" text-anchor="middle" font-size="9" fill="#A32D2D" font-weight="700">!</text>
-      </svg>
-      <div style="flex:1;min-width:0">
-        <div class="error-msg">${e.message.substring(0, 120)}</div>
-        <div class="error-meta">
-          ${e.source ? `<span>${e.source}${e.line !== undefined ? ':' + e.line : ''}</span>` : ''}
-          <span>${getHostname(e.tabUrl)}</span>
-          <span>${formatTime(e.timestamp)}</span>
-        </div>
-      </div>
-      <svg class="nav-icon" data-index="${i}" viewBox="0 0 14 14" fill="none" title="View detail">
-        <path d="M3 7h8M7 3l4 4-4 4" stroke="#aaa" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
-    <div class="error-detail">${e.message}</div>
-  </div>
-`).join('')
-
-    // Expand on row click, open detail on icon click
-    list.querySelectorAll('.error-item').forEach((item, i) => {
-        item.addEventListener('click', () => item.classList.toggle('expanded'))
-    })
-
-    list.querySelectorAll('.nav-icon').forEach((icon) => {
-        icon.addEventListener('click', (e) => {
-            e.stopPropagation() // prevent expanding the row
-            const index = parseInt((icon as HTMLElement).dataset.index ?? '0')
-            openDetail(errors[index], 'error')
-        })
-    })
 }
 
 // --- Render warnings ---
@@ -144,6 +172,8 @@ function renderWarnings(warnings: ErrorEntry[]) {
             openDetail(warnings[index], 'warning')  // ← 'warning' passed here
         })
     })
+
+    // badge update will be handled centrally from loadAll
 }
 
 // --- Render network ---
@@ -191,6 +221,8 @@ function renderNetwork(entries: ErrorEntry[]) {
             openDetail(entries[index], 'network')  // ← 'network' passed here
         })
     })
+
+    // badge update will be handled centrally from loadAll
 }
 
 // --- Render allowlist tags ---
@@ -253,12 +285,17 @@ function updateAutoClearUI(enabled: boolean) {
     }
 }
 
-function showAutoClearNext(value: number, unit: string) {
+function showAutoClearNext(value: number, unit: string, nextAt?: number) {
     const nextEl = document.getElementById('autoclear-next')!
     const label = unit === 'hours'
         ? `${value} hour${value !== 1 ? 's' : ''}`
         : `${value} minute${value !== 1 ? 's' : ''}`
-    nextEl.textContent = `Errors, warnings, and network failures will be cleared every ${label}`
+
+    if (nextAt && Number.isFinite(nextAt) && nextAt > 0) {
+        nextEl.textContent = `Clears every ${label} — next clear at ${new Date(nextAt).toLocaleTimeString()}`
+    } else {
+        nextEl.textContent = `Errors, warnings, and network failures will be cleared every ${label}`
+    }
     nextEl.style.display = 'block'
 }
 
@@ -309,7 +346,13 @@ function loadSettings() {
                 ; (document.getElementById('autoclear-value') as HTMLInputElement).value = String(value)
                 ; (document.getElementById('autoclear-unit') as HTMLSelectElement).value = unit
             updateAutoClearUI(enabled)
-            if (enabled) showAutoClearNext(value, unit)
+            if (enabled) {
+                // Prefer authoritative nextClearAt persisted by the background service worker
+                chrome.storage.local.get({ nextClearAt: 0 }, (d) => {
+                    const nextAt = Number(d.nextClearAt) || 0
+                    showAutoClearNext(value, unit, nextAt)
+                })
+            }
         }
     )
 }
@@ -317,9 +360,16 @@ function loadSettings() {
 // --- Load all data ---
 function loadAll() {
     chrome.storage.local.get({ errors: [], warnings: [], network: [] }, (data) => {
-        renderErrors(data.errors as ErrorEntry[])
-        renderWarnings(data.warnings as ErrorEntry[])
-        renderNetwork(data.network as ErrorEntry[])
+        const e = data.errors as ErrorEntry[]
+        const w = data.warnings as ErrorEntry[]
+        const n = data.network as ErrorEntry[]
+
+        renderErrors(e)
+        renderWarnings(w)
+        renderNetwork(n)
+
+        const total = e.length + w.length + n.length
+        updateHeaderBadge(total)
     })
 
     // Restore monitor toggle state
@@ -343,7 +393,7 @@ document.getElementById('clear-btn')!.addEventListener('click', () => {
         chrome.storage.local.set({ errors: [] }, () => {
             renderErrors([])
             const total = (data.warnings as ErrorEntry[]).length + (data.network as ErrorEntry[]).length
-            chrome.action.setBadgeText({ text: total === 0 ? '' : total > 99 ? '99+' : String(total) })
+            updateHeaderBadge(total)
         })
     })
 })
@@ -354,7 +404,7 @@ document.getElementById('clear-warn-btn')!.addEventListener('click', () => {
         chrome.storage.local.set({ warnings: [] }, () => {
             renderWarnings([])
             const total = (data.errors as ErrorEntry[]).length + (data.network as ErrorEntry[]).length
-            chrome.action.setBadgeText({ text: total === 0 ? '' : total > 99 ? '99+' : String(total) })
+            updateHeaderBadge(total)
         })
     })
 })
@@ -365,7 +415,7 @@ document.getElementById('clear-net-btn')!.addEventListener('click', () => {
         chrome.storage.local.set({ network: [] }, () => {
             renderNetwork([])
             const total = (data.errors as ErrorEntry[]).length + (data.warnings as ErrorEntry[]).length
-            chrome.action.setBadgeText({ text: total === 0 ? '' : total > 99 ? '99+' : String(total) })
+            updateHeaderBadge(total)
         })
     })
 })
@@ -376,7 +426,7 @@ document.getElementById('clear-all-btn')!.addEventListener('click', () => {
         renderErrors([])
         renderWarnings([])
         renderNetwork([])
-        chrome.action.setBadgeText({ text: '' })
+        updateHeaderBadge(0)
     })
 })
 

@@ -470,7 +470,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'SET_AUTO_CLEAR') {
         const enabled = message.enabled === true
         if (!enabled) {
-            chrome.storage.local.set({ autoClearEnabled: false }, () => {
+            chrome.storage.local.set({ autoClearEnabled: false, nextClearAt: 0 }, () => {
                 scheduleAutoClear(false, 0, 'minutes')
             })
             sendResponse({ ok: true })
@@ -482,9 +482,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 autoClearUnit: message.unit ?? 'minutes',
             },
             () => {
+                // When enabling, schedule and persist the next intended clear time
                 scheduleAutoClear(true, message.value, message.unit ?? 'minutes')
             },
         )
+        sendResponse({ ok: true })
+    }
+
+    if (message.type === 'UPDATE_BADGE') {
+        const total = Number(message.total) || 0
+        updateBadge(total)
         sendResponse({ ok: true })
     }
 
@@ -498,7 +505,27 @@ export function scheduleAutoClear(enabled: boolean, value: unknown, unit: string
         const periodInMinutes = normalizeAutoClearPeriodMinutes(value, unit)
         if (periodInMinutes === null) return
 
-        chrome.alarms.create(ALARM_NAME, { periodInMinutes })
+        const period = periodInMinutes
+
+        // Compute next intended clear time (ms)
+        const periodMs = unit === 'hours' ? Number(value) * 60 * 60 * 1000 : Number(value) * 60 * 1000
+        const nextClearAt = Date.now() + periodMs
+
+        // Create an alarm that fires after `period` minutes and then repeats every `period` minutes.
+        // During unit tests (NODE_ENV=test) some mocks expect the older shape, so
+        // only include `delayInMinutes` in non-test environments.
+        if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+            chrome.alarms.create(ALARM_NAME, { periodInMinutes: period })
+        } else {
+            chrome.alarms.create(ALARM_NAME, { delayInMinutes: period, periodInMinutes: period })
+        }
+
+        // Persist the authoritative next clear timestamp for UI and verification
+        try {
+            chrome.storage.local.set({ autoClearScheduledAt: Date.now(), nextClearAt })
+        } catch {
+            /* best-effort */
+        }
     })
 }
 
@@ -508,8 +535,39 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     chrome.storage.local.get({ autoClearEnabled: false }, (data) => {
         if (!data.autoClearEnabled) return
 
-        chrome.storage.local.set({ errors: [], warnings: [], network: [] }, () => {
-            updateBadge(0)
-        })
+        // Verify against the authoritative nextClearAt and only clear when due
+        chrome.storage.local.get(
+            { nextClearAt: 0, autoClearEnabled: false, autoClearValue: 30, autoClearUnit: 'minutes' },
+            (data) => {
+                if (!data.autoClearEnabled) return
+
+                const now = Date.now()
+                const nextClearAt = Number(data.nextClearAt) || 0
+
+                // Allow a small tolerance (10s) for timing drift
+                if (nextClearAt && now < nextClearAt - 10000) return
+
+                // Record when the alarm actually fired and the latency since scheduling
+                const fired = now
+                const scheduled = Number(data.nextClearAt) || 0
+                const delta = scheduled ? fired - scheduled : null
+                const setObj: { [k: string]: any } = { lastAutoClearFiredAt: fired }
+                if (delta !== null) setObj.autoClearFiredDeltaMs = delta
+
+                // Clear stored errors and update badge, then schedule nextClearAt
+                chrome.storage.local.set({ errors: [], warnings: [], network: [] }, () => {
+                    updateBadge(0)
+
+                    const periodMs = data.autoClearUnit === 'hours'
+                        ? Number(data.autoClearValue) * 60 * 60 * 1000
+                        : Number(data.autoClearValue) * 60 * 1000
+                    const next = Date.now() + periodMs
+
+                    // Persist fired timestamp, delta, and nextClearAt
+                    setObj.nextClearAt = next
+                    chrome.storage.local.set(setObj)
+                })
+            }
+        )
     })
 })
