@@ -44,22 +44,75 @@ chrome.storage.local.get(
 )
 
 // Restore paused state on service worker startup (persisted across browser restarts)
-chrome.storage.local.get({ pausedPersistent: false }, (d) => {
-    const pausedPersistent = Boolean(d.pausedPersistent)
-    chrome.storage.session.set({ paused: pausedPersistent }, () => {
-        if (pausedPersistent) {
-            // Ensure we are detached from any tabs if previously paused
-            chrome.tabs.query({}, (tabs) => {
-                tabs.forEach(tab => {
-                    if (tab.id && attachedTabs.has(tab.id)) detachFromTab(tab.id)
-                })
+// Restore paused state on service worker startup (persisted across browser restarts).
+// If the `pausedPersistent` key is missing, treat this as a fresh install and
+// default to paused (do not start monitoring). This avoids attaching before the
+// install handler runs.
+// Proactively set session paused to true to guard against any early event
+// handlers firing before we read storage. This is best-effort and will be
+// overwritten below if the persisted value indicates monitoring should run.
+try {
+    if (chrome.storage && chrome.storage.session && typeof chrome.storage.session.set === 'function') {
+        chrome.storage.session.set({ paused: true })
+    }
+} catch { }
+
+chrome.storage.local.get('pausedPersistent', (d) => {
+    if (d && Object.prototype.hasOwnProperty.call(d, 'pausedPersistent')) {
+        const pausedPersistent = Boolean(d.pausedPersistent)
+        chrome.storage.session.set({ paused: pausedPersistent }, () => {
+            if (pausedPersistent) {
+                // Ensure we are detached from any tabs if previously paused
+                if (chrome.tabs && typeof chrome.tabs.query === 'function') {
+                    chrome.tabs.query({}, (tabs) => {
+                        tabs.forEach(tab => {
+                            if (tab.id && attachedTabs.has(tab.id)) detachFromTab(tab.id)
+                        })
+                    })
+                }
+            } else {
+                // Otherwise sync to current config and attach as needed
+                syncAllTabs()
+            }
+        })
+    } else {
+        // First run: mark pausedPersistent true and set session paused true.
+        try {
+            chrome.storage.local.set({ pausedPersistent: true }, () => {
+                try { chrome.storage.session.set({ paused: true }) } catch { /* best-effort */ }
+                // Ensure any accidental attachments are removed
+                if (chrome.tabs && typeof chrome.tabs.query === 'function') {
+                    chrome.tabs.query({}, (tabs) => {
+                        tabs.forEach(tab => {
+                            if (tab.id && attachedTabs.has(tab.id)) detachFromTab(tab.id)
+                        })
+                    })
+                }
             })
-        } else {
-            // Otherwise sync to current config and attach as needed
-            syncAllTabs()
+        } catch {
+            // best-effort; if storage is unavailable just set session paused
+            try { chrome.storage.session.set({ paused: true }) } catch { /* ignore */ }
+        }
+    }
+})
+
+// When the extension is first installed, default to paused/monitoring disabled.
+// Users can opt-in later via the popup. This ensures new installs don't start
+// monitoring pages unexpectedly.
+if (
+    typeof chrome !== 'undefined' &&
+    chrome.runtime &&
+    chrome.runtime.onInstalled &&
+    typeof chrome.runtime.onInstalled.addListener === 'function'
+) {
+    chrome.runtime.onInstalled.addListener((details) => {
+        if (details && details.reason === 'install') {
+            chrome.storage.local.set({ pausedPersistent: true }, () => {
+                try { chrome.storage.session.set({ paused: true }) } catch { /* best-effort */ }
+            })
         }
     })
-})
+}
 
 // Helper to get hostname safely
 export function getHostname(url: string): string {
