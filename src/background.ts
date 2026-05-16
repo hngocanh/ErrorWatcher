@@ -200,10 +200,16 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             }
 
             chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
-                if (config.mode === 'specific' && !isAllowed(url, config)) {
-                    detachFromTab(tabId)
-                } else if (config.mode === 'specific' && isAllowed(url, config) && !attachedTabs.has(tabId)) {
-                    attachToTab(tabId, url, config)
+                if (config.mode === 'all') {
+                    if (!attachedTabs.has(tabId)) {
+                        attachToTab(tabId, url, config)
+                    }
+                } else if (config.mode === 'specific') {
+                    if (!isAllowed(url, config)) {
+                        detachFromTab(tabId)
+                    } else if (isAllowed(url, config) && !attachedTabs.has(tabId)) {
+                        attachToTab(tabId, url, config)
+                    }
                 }
             })
         })
@@ -279,6 +285,42 @@ chrome.tabs.onCreated.addListener((tab) => {
         })
     })
 })
+
+// Some navigations (SPA pushState / history updates) don't always emit a
+// `tabs.onUpdated` with `changeInfo.url`. Use webNavigation.onBeforeNavigate
+// to attach even earlier — before the navigation request starts — to ensure
+// we attach the debugger before page scripts run.
+if (chrome.webNavigation && chrome.webNavigation.onBeforeNavigate) {
+    chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+        const tabId = details.tabId
+        const url = details.url
+        if (typeof tabId !== 'number' || tabId < 0) return
+        if (!url) return
+        if (isInternalUrl(url)) {
+            detachFromTab(tabId)
+            return
+        }
+
+        chrome.storage.session.get({ paused: false }, (sessionData) => {
+            if (sessionData.paused) {
+                detachFromTab(tabId)
+                return
+            }
+
+            chrome.storage.local.get({ mode: 'all', allowlist: [] }, (config) => {
+                if (config.mode === 'all') {
+                    if (!attachedTabs.has(tabId)) attachToTab(tabId, url, config)
+                } else if (config.mode === 'specific') {
+                    if (!isAllowed(url, config)) {
+                        detachFromTab(tabId)
+                    } else if (isAllowed(url, config) && !attachedTabs.has(tabId)) {
+                        attachToTab(tabId, url, config)
+                    }
+                }
+            })
+        })
+    })
+}
 
 // Listen for all CDP events
 chrome.debugger.onEvent.addListener((source, method, params: any) => {
