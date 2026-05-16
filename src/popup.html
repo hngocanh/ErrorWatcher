@@ -510,6 +510,68 @@
             stroke: #A32D2D;
         }
 
+        /* Auto-clear */
+        .autoclear-input-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .autoclear-input {
+            width: 60px;
+            font-size: 12px;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            outline: none;
+            text-align: center;
+        }
+
+        .autoclear-input:focus {
+            border-color: #aaa;
+        }
+
+        .autoclear-input:disabled {
+            background: #f5f5f5;
+            color: #bbb;
+            cursor: not-allowed;
+        }
+
+        .autoclear-select {
+            font-size: 12px;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            outline: none;
+            background: #fff;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .autoclear-select:disabled {
+            background: #f5f5f5;
+            color: #bbb;
+            cursor: not-allowed;
+        }
+
+        .autoclear-hint {
+            font-size: 11px;
+            color: #aaa;
+            padding: 0 12px 8px;
+        }
+
+        .autoclear-hint.error {
+            color: #A32D2D;
+        }
+
+        .autoclear-next {
+            font-size: 11px;
+            color: #639922;
+            padding: 0 12px 8px;
+        }
+
         #pane-warnings,
         #pane-network,
         #pane-settings {
@@ -652,6 +714,24 @@
             </div>
             <label class="toggle"><input type="checkbox" id="s-notif"><span class="slider"></span></label>
         </div>
+        <div class="settings-section-title">Auto-clear</div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-label">Auto-clear log</div>
+                <div class="settings-sub">Clears errors, warnings, and network failures on a timer</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="s-autoclear"><span class="slider"></span></label>
+        </div>
+        <div class="autoclear-input-row" id="autoclear-input-row">
+            <span style="font-size:12px;color:#555;">Clear every</span>
+            <input class="autoclear-input" id="autoclear-value" type="number" min="1" step="1" value="30" disabled />
+            <select class="autoclear-select" id="autoclear-unit" disabled>
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+            </select>
+        </div>
+        <div id="autoclear-hint" class="autoclear-hint" style="display:none;"></div>
+        <div id="autoclear-next" class="autoclear-next" style="display:none;"></div>
 
     </div>
 

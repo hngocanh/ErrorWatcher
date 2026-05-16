@@ -227,10 +227,58 @@ function renderAllowlist(allowlist: string[]) {
     })
 }
 
+// --- Auto-clear UI helpers ---
+function parsePositiveIntegerInterval(raw: string): number | null {
+    const trimmed = raw.trim()
+    if (trimmed === '') return null
+    const num = Number(trimmed)
+    if (!Number.isFinite(num) || !Number.isInteger(num) || num < 1) return null
+    return num
+}
+
+function normalizeStoredAutoClearValue(raw: unknown): number {
+    const n = typeof raw === 'number' ? raw : Number(raw)
+    if (Number.isFinite(n) && Number.isInteger(n) && n >= 1) return n
+    return 30
+}
+
+function updateAutoClearUI(enabled: boolean) {
+    const valueInput = document.getElementById('autoclear-value') as HTMLInputElement
+    const unitSelect = document.getElementById('autoclear-unit') as HTMLSelectElement
+    valueInput.disabled = !enabled
+    unitSelect.disabled = !enabled
+    if (!enabled) {
+        document.getElementById('autoclear-hint')!.style.display = 'none'
+        document.getElementById('autoclear-next')!.style.display = 'none'
+    }
+}
+
+function showAutoClearNext(value: number, unit: string) {
+    const nextEl = document.getElementById('autoclear-next')!
+    const label = unit === 'hours'
+        ? `${value} hour${value !== 1 ? 's' : ''}`
+        : `${value} minute${value !== 1 ? 's' : ''}`
+    nextEl.textContent = `Errors, warnings, and network failures will be cleared every ${label}`
+    nextEl.style.display = 'block'
+}
+
+function showAutoClearError(msg: string) {
+    const hint = document.getElementById('autoclear-hint')!
+    hint.textContent = msg
+    hint.className = 'autoclear-hint error'
+    hint.style.display = 'block'
+}
+
+function clearAutoClearError() {
+    const hint = document.getElementById('autoclear-hint')!
+    hint.style.display = 'none'
+    hint.className = 'autoclear-hint'
+}
+
 // --- Load settings ---
 function loadSettings() {
     chrome.storage.local.get(
-        { mode: 'all', allowlist: [], captureJs: true, captureConsole: true, captureWarnings: false, captureNetwork: true, notifications: false },
+        { mode: 'all', allowlist: [], captureJs: true, captureConsole: true, captureWarnings: false, captureNetwork: true, notifications: false, autoClearEnabled: false, autoClearValue: 30, autoClearUnit: 'minutes' },
         (data) => {
             const mode = data.mode as string
 
@@ -251,6 +299,17 @@ function loadSettings() {
                 ; (document.getElementById('s-warn') as HTMLInputElement).checked = data.captureWarnings as boolean
                 ; (document.getElementById('s-network') as HTMLInputElement).checked = data.captureNetwork as boolean
                 ; (document.getElementById('s-notif') as HTMLInputElement).checked = data.notifications as boolean
+
+            // Auto-clear
+            const enabled = data.autoClearEnabled as boolean
+            const value = normalizeStoredAutoClearValue(data.autoClearValue)
+            const unit = data.autoClearUnit as string
+
+                ; (document.getElementById('s-autoclear') as HTMLInputElement).checked = enabled
+                ; (document.getElementById('autoclear-value') as HTMLInputElement).value = String(value)
+                ; (document.getElementById('autoclear-unit') as HTMLSelectElement).value = unit
+            updateAutoClearUI(enabled)
+            if (enabled) showAutoClearNext(value, unit)
         }
     )
 }
@@ -392,6 +451,60 @@ Object.entries(captureToggles).forEach(([id, storageKey]) => {
         chrome.storage.local.set({ [storageKey]: checked })
     })
 })
+
+// --- Auto-clear toggle ---
+document.getElementById('s-autoclear')!.addEventListener('change', e => {
+    const enabled = (e.target as HTMLInputElement).checked
+    const value = parsePositiveIntegerInterval((document.getElementById('autoclear-value') as HTMLInputElement).value)
+    const unit = (document.getElementById('autoclear-unit') as HTMLSelectElement).value
+
+    updateAutoClearUI(enabled)
+
+    if (enabled) {
+        if (value === null) {
+            showAutoClearError('Please enter a whole number of 1 or more.')
+                ; (e.target as HTMLInputElement).checked = false
+            updateAutoClearUI(false)
+            return
+        }
+        clearAutoClearError()
+        showAutoClearNext(value, unit)
+        chrome.storage.local.set(
+            { autoClearEnabled: true, autoClearValue: value, autoClearUnit: unit },
+            () => {
+                chrome.runtime.sendMessage({ type: 'SET_AUTO_CLEAR', enabled: true, value, unit })
+            },
+        )
+        return
+    }
+
+    chrome.storage.local.set({ autoClearEnabled: false }, () => {
+        chrome.runtime.sendMessage({ type: 'SET_AUTO_CLEAR', enabled: false })
+    })
+})
+
+// --- Auto-clear value/unit change ---
+function onAutoClearChange() {
+    const enabled = (document.getElementById('s-autoclear') as HTMLInputElement).checked
+    if (!enabled) return
+
+    const value = parsePositiveIntegerInterval((document.getElementById('autoclear-value') as HTMLInputElement).value)
+    const unit = (document.getElementById('autoclear-unit') as HTMLSelectElement).value
+
+    if (value === null) {
+        showAutoClearError('Please enter a whole number of 1 or more.')
+        return
+    }
+
+    clearAutoClearError()
+    showAutoClearNext(value, unit)
+    chrome.storage.local.set({ autoClearValue: value, autoClearUnit: unit }, () => {
+        chrome.runtime.sendMessage({ type: 'SET_AUTO_CLEAR', enabled: true, value, unit })
+    })
+}
+
+document.getElementById('autoclear-value')!.addEventListener('change', onAutoClearChange)
+document.getElementById('autoclear-unit')!.addEventListener('change', onAutoClearChange)
 
 // --- Auto-refresh when storage changes ---
 chrome.storage.onChanged.addListener((changes) => {

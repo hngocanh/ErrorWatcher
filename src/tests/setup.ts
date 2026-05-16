@@ -84,6 +84,13 @@ const chromeMock = {
         onMessage: { addListener: vi.fn() },
         getURL: vi.fn((path: string) => `chrome-extension://test-id/${path}`),
     },
+    alarms: {
+        clear: vi.fn((_name?: string, callback?: () => void) => {
+            if (callback) callback()
+        }),
+        create: vi.fn(),
+        onAlarm: { addListener: vi.fn() },
+    },
 }
 
 // Expose as global

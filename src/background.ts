@@ -2,6 +2,23 @@ import { ErrorEntry } from './types'
 
 const attachedTabs = new Set<number>()
 
+const ALARM_NAME = 'autoClear'
+
+/** Upper bound so alarm intervals stay within practical Chrome limits (one year). */
+export const AUTO_CLEAR_MAX_PERIOD_MINUTES = 525600
+
+/**
+ * Valid whole interval in minutes for chrome.alarms, or null if invalid.
+ * Expects positive integers; `unit` is `'hours'` or minutes otherwise.
+ */
+export function normalizeAutoClearPeriodMinutes(rawValue: unknown, unit: string): number | null {
+    const n = typeof rawValue === 'number' ? rawValue : Number(rawValue)
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1) return null
+    const minutes = unit === 'hours' ? n * 60 : n
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > AUTO_CLEAR_MAX_PERIOD_MINUTES) return null
+    return minutes
+}
+
 // Track request URLs so we can look them up when they fail
 const requestUrls = new Map<string, string>()
 
@@ -13,6 +30,18 @@ chrome.storage.local.get({ errors: [], warnings: [], network: [] }, (data) => {
         (data.network as ErrorEntry[]).length
     updateBadge(total)
 })
+
+// Restore auto-clear alarm on service worker startup
+chrome.storage.local.get(
+    { autoClearEnabled: false, autoClearValue: 30, autoClearUnit: 'minutes' },
+    data => {
+        scheduleAutoClear(
+            data.autoClearEnabled as boolean,
+            data.autoClearValue as number,
+            data.autoClearUnit as string
+        )
+    }
+)
 
 // Helper to get hostname safely
 export function getHostname(url: string): string {
@@ -39,7 +68,11 @@ export function isAllowed(url: string, config: { [key: string]: any }): boolean 
     if (isInternalUrl(url)) return false
     if (config.mode === 'all') return true
 
-    const allowlist = config.allowlist as string[]
+    const allowlist = Array.isArray(config?.allowlist)
+        ? (config.allowlist as unknown[])
+            .map((entry) => typeof entry === 'string' ? entry.trim().toLowerCase() : '')
+            .filter((entry): entry is string => entry.length > 0)
+        : []
     if (allowlist.length === 0) return false
 
     let hostname = ''
@@ -63,7 +96,9 @@ export function isAllowed(url: string, config: { [key: string]: any }): boolean 
             return port === domain.slice(1)
         }
         // Normal domain or host:port match
-        return host.includes(domain) || hostname.includes(domain)
+        const normalizedHost = host.toLowerCase()
+        const normalizedHostname = hostname.toLowerCase()
+        return normalizedHost.includes(domain) || normalizedHostname.includes(domain)
     })
 }
 
@@ -432,5 +467,49 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({ ok: true })
     }
 
+    if (message.type === 'SET_AUTO_CLEAR') {
+        const enabled = message.enabled === true
+        if (!enabled) {
+            chrome.storage.local.set({ autoClearEnabled: false }, () => {
+                scheduleAutoClear(false, 0, 'minutes')
+            })
+            sendResponse({ ok: true })
+        }
+        chrome.storage.local.set(
+            {
+                autoClearEnabled: true,
+                autoClearValue: message.value,
+                autoClearUnit: message.unit ?? 'minutes',
+            },
+            () => {
+                scheduleAutoClear(true, message.value, message.unit ?? 'minutes')
+            },
+        )
+        sendResponse({ ok: true })
+    }
+
     return true
+})
+
+export function scheduleAutoClear(enabled: boolean, value: unknown, unit: string) {
+    chrome.alarms.clear(ALARM_NAME, () => {
+        if (!enabled) return
+
+        const periodInMinutes = normalizeAutoClearPeriodMinutes(value, unit)
+        if (periodInMinutes === null) return
+
+        chrome.alarms.create(ALARM_NAME, { periodInMinutes })
+    })
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== ALARM_NAME) return
+
+    chrome.storage.local.get({ autoClearEnabled: false }, (data) => {
+        if (!data.autoClearEnabled) return
+
+        chrome.storage.local.set({ errors: [], warnings: [], network: [] }, () => {
+            updateBadge(0)
+        })
+    })
 })
